@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS sessions
+DROP TABLE IF EXISTS student_campus_changes
+DROP TABLE IF EXISTS students
+DROP TABLE IF EXISTS pilots
+DROP TABLE IF EXISTS campus

@@ -1,0 +1,26 @@
+services:
+  redis:
+    image: redis:8.0-alpine          # 8.6.1 no existe aún, usa una tag real
+    container_name: redis-umg-transportation-tracker
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_umg_tracker:/data
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    container_name: postgres-umg-transportation-tracker
+    environment:                     # corregido el typo
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: postgresumgtracker
+      POSTGRES_DB: transportation-tracker-db
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres_umg_tracker:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  redis_umg_tracker:
+  postgres_umg_tracker:
