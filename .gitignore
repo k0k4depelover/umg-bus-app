@@ -10,6 +10,7 @@
 **/.env
 **/.env.*
 !**/.env.example
+INFO.md
 
 # ─── Go ──────────────────────────────────────────────────────
 *.exe
@@ -122,6 +123,9 @@ docker-compose.local.yml
 *.sql.gz
 pgdata/
 redisdata/
+
+# ─── Project docs (local only) ───────────────────────────────
+BRANCH.md
 
 # ─── Miscellaneous ───────────────────────────────────────────
 *.tmp
