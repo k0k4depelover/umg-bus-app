@@ -78,6 +78,7 @@ func main() {
 
 	// WebSocket en servidor net/http separado
 	// Fiber usa fasthttp que no soporta WebSocket hijack via adaptor
+	// Implementamos el webSocket en otro puerto mediante otro servicio.
 	wsMux := http.NewServeMux()
 	wsMux.HandleFunc("/ws/pilot", location.HandlePilot(hub))
 	go func() {
