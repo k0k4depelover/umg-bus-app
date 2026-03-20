@@ -1,0 +1,38 @@
+type MapBounds{
+  swLat : Float!
+  swLng: Float!
+  neLat : Float
+  neLng: Float!
+}
+
+type Campus{
+  campusID: ID!
+  name: String!
+  city: String!
+  bounds: MapBounds!
+  activePilot: PilotStatus
+}
+
+type PilotStatus{
+  pilotId: ID!
+  fullName: String!
+  isOnline: Boolean!
+  lastSeen: String!
+}
+
+type LiveLocation{
+  pilotId: ID!
+  campusID: ID!
+  lat: Float!
+  lng: Float!
+  bearing: Float!
+  speedKmh: Float!
+  updatedAt: String!
+}
+
+type Query{
+  campuses: [Campus!]!
+  campus(id:ID!):Campus
+
+  liveLocation(CampusId: ID!): LiveLocation
+}

@@ -13,7 +13,11 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/fiber/v2"
+	"github.com/umg-bus-app/backend/graph"
 	"github.com/umg-bus-app/backend/internal/config"
 	"github.com/umg-bus-app/backend/internal/db"
 	"github.com/umg-bus-app/backend/internal/location"
@@ -86,7 +90,20 @@ func main() {
 			log.Fatalf("WS server error: %v", err)
 		}
 	}()
+	gqlSrv := handler.NewDefaultServer(
+		graph.NewExecutableSchema(graph.Config{
+			Resolvers: &graph.Resolver{
+				CampusRepo: campusRepo,
+				PilotRepo:  pilotRepo,
+				Hub:        hub,
+			},
+		}),
+	)
+
+	app.Get("/playground", adaptor.HTTPHandler(playground.Handler("GraphQL", "/graphql")))
+	app.All("/graphql", adaptor.HTTPHandler(gqlSrv))
 
 	log.Printf("Servidor en el puerto %s", cfg.AppPort)
 	log.Fatal(app.Listen(":" + cfg.AppPort))
+
 }
