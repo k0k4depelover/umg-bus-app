@@ -46,9 +46,9 @@ import (
 
 type PilotPing struct {
 	Lat     float64 `json:"lat"`
-	Lng     float64 `json: lng`
-	Bearing float64 `json: "bearing"`
-	Speed   float64 `json: "speed"`
+	Lng     float64 `json:"lng"`
+	Bearing float64 `json:"bearing"`
+	Speed   float64 `json:"speed"`
 }
 
 type LiveLocation struct {

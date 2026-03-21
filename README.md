@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 **Real-time university transport tracking system**
-*GSoC Proposal · Universidad Mesoamericana de Guatemala (UMG)*
+_GSoC Proposal · Universidad Mesoamericana de Guatemala (UMG)_
 
 </div>
 
@@ -39,25 +39,28 @@ This project is presented as a **Google Summer of Code (GSoC) proposal**, showca
 ## Tech Stack / Tecnologías
 
 ### Backend
-| Technology | Version | Purpose |
-|---|---|---|
-| [Go](https://go.dev/) | 1.25 | Primary backend language |
-| [Gofiber v2](https://gofiber.io/) | v2 | HTTP REST API framework |
-| [PostgreSQL](https://www.postgresql.org/) | 15 | Relational database (campus, pilots, students, sessions) |
-| [pgx/v5](https://github.com/jackc/pgx) | v5 | PostgreSQL driver for Go |
-| [Redis](https://redis.io/) | 8 | Real-time state cache + Pub/Sub for location broadcasting |
-| [coder/websocket](https://github.com/coder/websocket) | latest | WebSocket protocol (pilot GPS streaming) |
-| [golang-migrate](https://github.com/golang-migrate/migrate) | latest | Database schema migrations |
+
+| Technology                                                  | Version | Purpose                                                   |
+| ----------------------------------------------------------- | ------- | --------------------------------------------------------- |
+| [Go](https://go.dev/)                                       | 1.25    | Primary backend language                                  |
+| [Gofiber v2](https://gofiber.io/)                           | v2      | HTTP REST API framework                                   |
+| [PostgreSQL](https://www.postgresql.org/)                   | 15      | Relational database (campus, pilots, students, sessions)  |
+| [pgx/v5](https://github.com/jackc/pgx)                      | v5      | PostgreSQL driver for Go                                  |
+| [Redis](https://redis.io/)                                  | 8       | Real-time state cache + Pub/Sub for location broadcasting |
+| [coder/websocket](https://github.com/coder/websocket)       | latest  | WebSocket protocol (pilot GPS streaming)                  |
+| [golang-migrate](https://github.com/golang-migrate/migrate) | latest  | Database schema migrations                                |
 
 ### Frontend
-| Technology | Version | Purpose |
-|---|---|---|
-| [React](https://react.dev/) | 19.2.4 | UI framework |
-| [Vite](https://vitejs.dev/) | 8.0.0 | Build tool and dev server |
+
+| Technology                  | Version | Purpose                   |
+| --------------------------- | ------- | ------------------------- |
+| [React](https://react.dev/) | 19.2.4  | UI framework              |
+| [Vite](https://vitejs.dev/) | 8.0.0   | Build tool and dev server |
 
 ### Infrastructure
-| Technology | Purpose |
-|---|---|
+
+| Technology                                         | Purpose                                                       |
+| -------------------------------------------------- | ------------------------------------------------------------- |
 | [Docker Compose](https://docs.docker.com/compose/) | Orchestrates PostgreSQL (port `5436`) and Redis (port `6381`) |
 
 ---
@@ -101,6 +104,7 @@ This project is presented as a **Google Summer of Code (GSoC) proposal**, showca
 ```
 
 **Data flow:**
+
 1. The pilot opens a WebSocket to `/ws/pilot?pilot_id=X&campus_id=Y`
 2. The pilot's app streams GPS pings (`lat`, `lng`, timestamp) continuously
 3. The Hub saves current state in Redis (with TTL) and publishes to a Pub/Sub channel
@@ -122,13 +126,13 @@ The PostgreSQL schema (3NF, fully relational) includes:
 
 ## API Endpoints
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/health-check` | Server liveness check |
-| `GET` | `/campus` | List all active campuses |
-| `GET` | `/campus/:id` | Get campus by ID |
-| `GET` | `/campus/:id/pilot` | Get pilot assigned to a campus |
-| `WS` | `/ws/pilot?pilot_id=&campus_id=` | WebSocket — pilot GPS streaming (port 8085) |
+| Method | Path                             | Description                                 |
+| ------ | -------------------------------- | ------------------------------------------- |
+| `GET`  | `/health-check`                  | Server liveness check                       |
+| `GET`  | `/campus`                        | List all active campuses                    |
+| `GET`  | `/campus/:id`                    | Get campus by ID                            |
+| `GET`  | `/campus/:id/pilot`              | Get pilot assigned to a campus              |
+| `WS`   | `/ws/pilot?pilot_id=&campus_id=` | WebSocket — pilot GPS streaming (port 8085) |
 
 > **Ports:** REST API → `:8084` · WebSocket → `:8085`
 
@@ -141,7 +145,7 @@ Make sure you have the following installed:
 - [Go 1.25+](https://go.dev/dl/)
 - [Node.js 20+](https://nodejs.org/) and npm
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (includes Docker Compose)
-- [GitHub CLI `gh`](https://cli.github.com/) *(optional, for contributors)*
+- [GitHub CLI `gh`](https://cli.github.com/) _(optional, for contributors)_
 
 ---
 
@@ -150,7 +154,7 @@ Make sure you have the following installed:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/umg-bus-app.git
+git clone https://github.com/k0k4developer/umg-bus-app.git
 cd umg-bus-app
 ```
 
@@ -171,6 +175,7 @@ docker compose up -d
 ```
 
 This starts:
+
 - **PostgreSQL 15** on `localhost:5436`
 - **Redis 8** on `localhost:6381`
 
@@ -193,6 +198,7 @@ go run ./cmd/server
 ```
 
 Server starts on:
+
 - **REST API:** `http://localhost:8084`
 - **WebSocket:** `ws://localhost:8085`
 
@@ -212,16 +218,17 @@ Frontend runs at `http://localhost:5173`
 
 This project follows a structured branching model inspired by Git Flow:
 
-| Branch | Purpose |
-|---|---|
-| `main` | Production-ready code. Only stable, reviewed code merges here. |
-| `develop` | Integration branch. All features merge here first. Base de trabajo. |
-| `feature/backend-core` | Go backend (REST API, DB, config, repositories) |
-| `feature/frontend-ui` | React frontend development |
-| `feature/websocket-realtime` | WebSocket Hub, pilot handler, real-time location |
-| `feature/docker-infra` | Docker Compose, infrastructure configuration |
+| Branch                       | Purpose                                                             |
+| ---------------------------- | ------------------------------------------------------------------- |
+| `main`                       | Production-ready code. Only stable, reviewed code merges here.      |
+| `develop`                    | Integration branch. All features merge here first. Base de trabajo. |
+| `feature/backend-core`       | Go backend (REST API, DB, config, repositories)                     |
+| `feature/frontend-ui`        | React frontend development                                          |
+| `feature/websocket-realtime` | WebSocket Hub, pilot handler, real-time location                    |
+| `feature/docker-infra`       | Docker Compose, infrastructure configuration                        |
 
 **Merge workflow:**
+
 ```
 feature/* ──► develop ──► main
 ```
@@ -288,7 +295,7 @@ This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for d
 
 <div align="center">
 
-Made with ❤️ for the Universidad Mesoamericana de Guatemala
-*GSoC Proposal · Open Source University Transport Tracking*
+Made with ❤️ for the Google Summer of Code Community
+_GSoC Proposal · Open Source University Transport Tracking_
 
 </div>
