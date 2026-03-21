@@ -12,6 +12,19 @@ import (
 	"github.com/umg-bus-app/backend/graph/model"
 )
 
+// ChangeCampus is the resolver for the changeCampus field.
+func (r *mutationResolver) ChangeCampus(ctx context.Context, studentID string, toCampusID string) (bool, error) {
+	if _, err := r.CampusRepo.GetByID(ctx, toCampusID); err != nil {
+		return false, fmt.Errorf("campus destino no existe")
+
+	}
+	if err := r.StudentRepo.ChangeCampus(ctx, studentID, toCampusID); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 // Campuses is the resolver for the campuses field.
 func (r *queryResolver) Campuses(ctx context.Context) ([]*model.Campus, error) {
 	campuses, err := r.CampusRepo.GetAll(ctx)
@@ -74,7 +87,11 @@ func (r *queryResolver) LiveLocation(ctx context.Context, campusID string) (*mod
 	}, nil
 }
 
+// Mutation returns MutationResolver implementation.
+func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
+
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
+type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }

@@ -27,6 +27,9 @@ type MapBounds struct {
 	NeLng float64  `json:"neLng"`
 }
 
+type Mutation struct {
+}
+
 type PilotStatus struct {
 	PilotID  string `json:"pilotId"`
 	FullName string `json:"fullName"`

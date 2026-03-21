@@ -5,8 +5,9 @@
 // 2. Llamadas a conectores de la base de datos. // Paso 2 y 3
 // 3. Logs de status, endpoints de status // Paso 2 y 3
 // 4. Añadir los archivos de migracion // Paso 4
-// 5. Añadir el hub // Paso
-
+// 5. Añadir el hub // Paso 10, debemos implemetar el handler del hub de conexiones, el manejo a
+// subir informacion para la suscripcion de usuarios al canal.
+// 6.
 package main
 
 import (
@@ -47,7 +48,7 @@ func main() {
 
 	campusRepo := repository.NewCampusRepo(pg)
 	pilotRepo := repository.NewPilotRepo(pg)
-
+	studentRepo := repository.NewStudentRepo(pg)
 	hub := location.NewHub(rdb)
 
 	app := fiber.New()
@@ -85,6 +86,7 @@ func main() {
 	// Implementamos el webSocket en otro puerto mediante otro servicio.
 	wsMux := http.NewServeMux()
 	wsMux.HandleFunc("/ws/pilot", location.HandlePilot(hub))
+	wsMux.HandleFunc("/ws/student", location.HandleStudent(hub))
 	go func() {
 		log.Printf("WebSocket server en puerto %s", cfg.WSPort)
 		if err := http.ListenAndServe(":"+cfg.WSPort, wsMux); err != nil {
@@ -94,9 +96,10 @@ func main() {
 	gqlSrv := handler.NewDefaultServer(
 		graph.NewExecutableSchema(graph.Config{
 			Resolvers: &graph.Resolver{
-				CampusRepo: campusRepo,
-				PilotRepo:  pilotRepo,
-				Hub:        hub,
+				CampusRepo:  campusRepo,
+				PilotRepo:   pilotRepo,
+				StudentRepo: studentRepo,
+				Hub:          hub,
 			},
 		}),
 	)
