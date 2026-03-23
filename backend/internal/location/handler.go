@@ -13,6 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+	"github.com/umg-bus-app/backend/internal/auth"
 )
 
 /*
@@ -91,8 +92,23 @@ permitiendo escalar el sistema.
 
 */
 
-func HandlePilot(hub *Hub) func(w http.ResponseWriter, r *http.Request) {
+func HandlePilot(hub *Hub, jwtSvc *auth.JWTService) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		tokenStr := r.URL.Query().Get("token")
+		if tokenStr == "" {
+			http.Error(w, "Token requerido", 401)
+			return
+		}
+		claims, err := jwtSvc.Verify(tokenStr)
+		if err != nil {
+			http.Error(w, "token invalido", 401)
+			return
+		}
+
+		if claims.Role != "pilot" {
+			http.Error(w, "acceso denegado", 403)
+		}
 		pilotID := r.URL.Query().Get("pilot_id")
 		campusID := r.URL.Query().Get("campus_id")
 

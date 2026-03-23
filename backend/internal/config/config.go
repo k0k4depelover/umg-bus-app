@@ -15,6 +15,7 @@ type Config struct {
 	RedisPass   string
 	AppPort     string
 	WSPort      string
+	JWTSecret   string
 }
 
 // Load -> Nombre
@@ -35,6 +36,7 @@ func Load() (*Config, error) {
 	pgUser := getEnv("POSTGRES_USER", "admin")
 	pgPass := getEnv("POSTGRES_PASSWORD", "postgresumgtracker")
 	pgDB := getEnv("POSTGRES_DB", "transportation-tracker-db")
+	JWTSecret := getEnv("JWT_SECRET", "dev-secret-cambia-en-produccion")
 
 	// & -> Es la direccion de memoria de una variable
 	// URL format requerido por golang-migrate; pgxpool también lo acepta.
@@ -44,10 +46,11 @@ func Load() (*Config, error) {
 	)
 	return &Config{
 		PostgresDSN: dsn,
-		RedisAddr:   getEnv("REFDIS_ADDR", "localhost:6381"),
+		RedisAddr:   getEnv("REDIS_ADDR", "localhost:6381"),
 		RedisPass:   getEnv("REDIS_PASS", ""),
 		AppPort:     getEnv("APP_PORT", "8084"),
 		WSPort:      getEnv("WS_PORT", "8085"),
+		JWTSecret:   JWTSecret,
 	}, nil
 }
 

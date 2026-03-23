@@ -19,6 +19,7 @@ import (
 	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/umg-bus-app/backend/graph"
+	"github.com/umg-bus-app/backend/internal/auth"
 	"github.com/umg-bus-app/backend/internal/config"
 	"github.com/umg-bus-app/backend/internal/db"
 	"github.com/umg-bus-app/backend/internal/location"
@@ -80,13 +81,19 @@ func main() {
 		}
 		return c.JSON(pilot)
 	})
+	jwtSvc := auth.NewJWTService(cfg.JWTSecret)
+	authHandler := auth.NewHandler(pg, rdb, jwtSvc)
+
+	app.Post("/auth/login", authHandler.Login)
+	app.Post("/auth/refresh", authHandler.Refresh)
+	app.Post("/auth/logout", authHandler.Logout)
 
 	// WebSocket en servidor net/http separado
 	// Fiber usa fasthttp que no soporta WebSocket hijack via adaptor
 	// Implementamos el webSocket en otro puerto mediante otro servicio.
 	wsMux := http.NewServeMux()
-	wsMux.HandleFunc("/ws/pilot", location.HandlePilot(hub))
-	wsMux.HandleFunc("/ws/student", location.HandleStudent(hub))
+	wsMux.HandleFunc("/ws/pilot", location.HandlePilot(hub, jwtSvc))
+	wsMux.HandleFunc("/ws/student", location.HandleStudent(hub, jwtSvc))
 	go func() {
 		log.Printf("WebSocket server en puerto %s", cfg.WSPort)
 		if err := http.ListenAndServe(":"+cfg.WSPort, wsMux); err != nil {
@@ -99,13 +106,15 @@ func main() {
 				CampusRepo:  campusRepo,
 				PilotRepo:   pilotRepo,
 				StudentRepo: studentRepo,
-				Hub:          hub,
+				Hub:         hub,
 			},
 		}),
 	)
 
+	app.Use("/graphql", auth.Middleware(jwtSvc))
+	app.Post("/graphql", adaptor.HTTPHandler(gqlSrv))
+
 	app.Get("/playground", adaptor.HTTPHandler(playground.Handler("GraphQL", "/graphql")))
-	app.All("/graphql", adaptor.HTTPHandler(gqlSrv))
 
 	log.Printf("Servidor en el puerto %s", cfg.AppPort)
 	log.Fatal(app.Listen(":" + cfg.AppPort))
