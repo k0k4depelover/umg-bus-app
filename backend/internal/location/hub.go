@@ -41,6 +41,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -234,4 +235,131 @@ func (h *Hub) GetLiveLocation(ctx context.Context, campusID string) (*LiveLocati
 	}
 
 	return loc, nil
+}
+
+/*
+PASO 11.
+Ya tenemos un handler para el repository de REDIS, el que maneja las peticiones
+HTTP que llegan, en este archivo habiamos dicho que manejamos la entrada de datos,
+estas funciones se llaman cuando se quieren subir datos a canales, guardamos las keys
+informacion que queremos guardar para mostrarla despues, y canales para la suscripcion.
+--------------------------------------------------------------------------------------
+
+// Subscribe maneja la suscripción en tiempo real de un cliente (WebSocket)
+// a un canal de Redis asociado a un campus.
+//
+//  Flujo normal:
+// 1. El cliente se conecta por WebSocket y envía el campusID.
+// 2. Esta función se suscribe al canal de Redis: "campus:channel:{campusID}".
+// 3. Mientras el cliente esté conectado:
+//    - Espera mensajes publicados en Redis.
+//    - Cada mensaje recibido se reenvía inmediatamente al cliente.
+// 4. Este proceso continúa indefinidamente hasta que el cliente se desconecta
+//    o ocurre un error.
+//
+// ⚙️ Concurrencia:
+// Se usa `select` para esperar múltiples eventos al mismo tiempo:
+// - Mensajes desde Redis (channel `ch`).
+// - Cancelación del contexto (`ctx.Done()`).
+//
+// 🧩 Casos manejados:
+// - ✔ Flujo normal:
+//     Llegan mensajes → se envían al cliente → loop infinito.
+//
+// - ❌ Canal cerrado (`ok == false`):
+//     Redis dejó de enviar datos → se termina.
+//
+// - ❌ Error en WebSocket:
+//     Cliente desconectado o fallo de red → se retorna error.
+//
+// - ❌ Contexto cancelado (`ctx.Done()`):
+//     El cliente se fue o se canceló la operación → salida limpia.
+//
+// 🧠 Nota:
+// Esta función es bloqueante y vive durante toda la conexión.
+//
+// ------------------------------------------------------------
+// 📚 GUÍA DE NOTACIONES (Go concurrency)
+//
+// 🔹 channel (chan)
+//   Es una “tubería” para enviar/recibir datos entre goroutines.
+//
+// 🔹 <- (operador de channel)
+//
+//   📥 Recibir:
+//     msg := <-ch
+//     → espera hasta que llegue un dato desde el canal
+//
+//   📥 Recibir con estado:
+//     msg, ok := <-ch
+//     → ok == false → canal cerrado
+//
+//   📤 Enviar:
+//     ch <- dato
+//     → envía un dato al canal
+//
+// 🔹 select
+//   Permite esperar múltiples operaciones de channel al mismo tiempo.
+//
+//   select {
+//     case msg := <-ch:
+//         // llegó un mensaje
+//     case <-ctx.Done():
+//         // cancelación
+//   }
+//
+//   → ejecuta el primer caso que esté listo (no bloquea todos)
+//
+// 🔹 ctx (context.Context)
+//   Maneja cancelación, timeouts y ciclo de vida.
+//
+//   <-ctx.Done()
+//   → señal de “terminar operación”
+//
+// 🔹 defer
+//   Ejecuta una instrucción al final de la función (cuando termina).
+//
+//   defer sub.Close()
+//   → asegura liberar recursos aunque haya error
+//
+// 🔹 for + select (loop reactivo)
+//
+//   for {
+//     select { ... }
+//   }
+//
+//   → patrón típico para:
+//     - sistemas en tiempo real
+//     - sockets
+//     - listeners
+//
+// ------------------------------------------------------------
+// 🚀 Modelo mental:
+//
+// Redis → (channel Go) → select → WebSocket → cliente
+//
+// Esta función actúa como puente en tiempo real entre backend y frontend.
+*/
+
+func (h *Hub) Suscribe(ctx context.Context, campusID string, conn *websocket.Conn) error {
+	channel := fmt.Sprintf("campus:channel:%s", campusID)
+	sub := h.rdb.Subscribe(ctx, channel)
+	defer sub.Close()
+
+	ch := sub.Channel()
+
+	for {
+		select {
+		case msg, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			if err := conn.Write(ctx, websocket.MessageText, []byte(msg.Payload)); err != nil {
+				return err
+			}
+
+		case <-ctx.Done():
+			return nil
+		}
+	}
 }

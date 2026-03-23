@@ -2,6 +2,8 @@
 #  UMG Bus App — .gitignore
 #  CRITICAL: Never commit .env files (real credentials inside)
 # =============================================================
+CLAUDE.md
+INFO.md
 
 # ─── Environment / Secrets ───────────────────────────────────
 .env

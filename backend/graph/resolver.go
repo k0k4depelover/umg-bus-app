@@ -11,7 +11,8 @@ import (
 // here.
 
 type Resolver struct {
-	CampusRepo *repository.CampusRepo
-	PilotRepo  *repository.PilotRepo
-	Hub        *location.Hub
+	CampusRepo  *repository.CampusRepo
+	PilotRepo   *repository.PilotRepo
+	StudentRepo *repository.StudentRepo
+	Hub         *location.Hub
 }

@@ -36,3 +36,7 @@ type Query{
 
   liveLocation(CampusId: ID!): LiveLocation
 }
+
+type Mutation{
+  changeCampus(studentId: ID!, toCampusId: ID!):Boolean!
+}
