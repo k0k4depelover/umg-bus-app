@@ -6,6 +6,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+	"github.com/umg-bus-app/backend/internal/auth"
 )
 
 type StudentMessage struct {
@@ -55,9 +56,16 @@ type StudentMessage struct {
 //   mensajes en tiempo real → cliente
 //
 
-func HandleStudent(hub *Hub) func(w http.ResponseWriter, r *http.Request) {
+func HandleStudent(hub *Hub, jwtSvc *auth.JWTService) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		campusID := r.URL.Query().Get("campus_id")
+
+		tokenStr := r.URL.Query().Get("token")
+		claims, err := jwtSvc.Verify(tokenStr)
+		if err != nil || claims.Role != "student" {
+			http.Error(w, "acceso denegado", 401)
+			return
+		}
+		campusID := claims.CampusID
 		if campusID == "" {
 			http.Error(w, "campus_id requerido", 400)
 			return
@@ -68,6 +76,7 @@ func HandleStudent(hub *Hub) func(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log.Printf("ws student accept: %v", err)
+			return
 		}
 		defer conn.Close(websocket.StatusNormalClosure, "desconectado del servidor")
 
@@ -75,7 +84,7 @@ func HandleStudent(hub *Hub) func(w http.ResponseWriter, r *http.Request) {
 
 		ctx := r.Context()
 
-		if loc, err := hub.GetLiveLocation(ctx, campusID); err != nil {
+		if loc, err := hub.GetLiveLocation(ctx, campusID); err == nil {
 			if err := wsjson.Write(ctx, conn, loc); err != nil {
 				log.Printf("error enviando la ubicacion inicial %v", err)
 				return

@@ -16,6 +16,15 @@ func NewStudentRepo(db *pgxpool.Pool) *StudentRepo {
 }
 
 // ChangeCampus actualiza el campus del estudiante y registra el cambio en student_campus_changes.
+
+/*
+
+Aca solo hacemos el ingreso en la tabla de control despues de que el usuario realiza una accion dentro de la aplicacion
+en este caso cambiarse de campus.
+Esta parte es simplementa una funcionalidad extra de control, no afecta a la funcionalidad principal de la aplicacion.
+
+*/
+
 func (r *StudentRepo) ChangeCampus(ctx context.Context, studentID string, toCampusID string) error {
 	var fromCampusID string
 	err := r.db.QueryRow(ctx,

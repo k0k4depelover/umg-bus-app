@@ -35,6 +35,10 @@ func NewCampusRepo(db *pgxpool.Pool) *CampusRepo {
 	return &CampusRepo{db: db}
 }
 
+func (r *CampusRepo) DB() *pgxpool.Pool {
+	return r.db
+}
+
 // Repositorio que nos permite obtener todos los campus de la base de datos
 // Devuelve -> Error y un objeto de tipo Campus el cual es una estructura que creamos anteriormente
 // el cual representa una tabla dentro de la base de datos.
