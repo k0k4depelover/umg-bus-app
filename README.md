@@ -295,7 +295,9 @@ This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for d
 
 <div align="center">
 
+This is a prototype of the idea that i propose to GSoC.
 Made with ❤️ for the Google Summer of Code Community
-_GSoC Proposal · Open Source University Transport Tracking_
+_GSoC Proposal · Open Source University Transport Tracking_ 
+
 
 </div>
