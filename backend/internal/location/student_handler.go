@@ -63,8 +63,9 @@ func HandleStudent(hub *Hub, jwtSvc *auth.JWTService) func(w http.ResponseWriter
 		claims, err := jwtSvc.Verify(tokenStr)
 		if err != nil || claims.Role != "student" {
 			http.Error(w, "acceso denegado", 401)
+			return
 		}
-		campusID := r.URL.Query().Get("campus_id")
+		campusID := claims.CampusID
 		if campusID == "" {
 			http.Error(w, "campus_id requerido", 400)
 			return
@@ -75,6 +76,7 @@ func HandleStudent(hub *Hub, jwtSvc *auth.JWTService) func(w http.ResponseWriter
 		})
 		if err != nil {
 			log.Printf("ws student accept: %v", err)
+			return
 		}
 		defer conn.Close(websocket.StatusNormalClosure, "desconectado del servidor")
 
@@ -82,7 +84,7 @@ func HandleStudent(hub *Hub, jwtSvc *auth.JWTService) func(w http.ResponseWriter
 
 		ctx := r.Context()
 
-		if loc, err := hub.GetLiveLocation(ctx, campusID); err != nil {
+		if loc, err := hub.GetLiveLocation(ctx, campusID); err == nil {
 			if err := wsjson.Write(ctx, conn, loc); err != nil {
 				log.Printf("error enviando la ubicacion inicial %v", err)
 				return

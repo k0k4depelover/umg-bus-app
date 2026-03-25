@@ -27,6 +27,8 @@ package auth
 import (
 	"crypto/sha256"
 	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -109,14 +111,14 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 		err = h.db.QueryRow(c.Context(),
 			`
 		SELECT pilot_id, campus_id, password_hash
-		FROM pilots WHERE pilot_id = $1 AND active=TRUE
+		FROM pilots WHERE username = $1 AND active=TRUE
 	`, req.Username).Scan(&userID, &campusID, &passwordHash)
 
 	case "student":
 		err = h.db.QueryRow(c.Context(),
 			`
 		SELECT student_id, campus_id, password_hash
-		FROM students WHERE student_id = $1 AND active=TRUE
+		FROM students WHERE username = $1 AND active=TRUE
 	`, req.Username).Scan(&userID, &campusID, &passwordHash)
 
 	}
@@ -139,14 +141,19 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 
 	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(refreshToken)))
 	key := fmt.Sprintf("refresh:%s", tokenHash)
-	h.rdb.Set(c.Context(), key, userID+"|"+req.Role, 7*24*time.Hour)
+	if err := h.rdb.Set(c.Context(), key, userID+"|"+req.Role, 7*24*time.Hour).Err(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Error guardando la sesion"})
+	}
 
-	h.db.Exec(c.Context(),
+	_, err = h.db.Exec(c.Context(),
 		`
-	INSERT INTO sessions(user_id, user_role, token, expires_at)
+	INSERT INTO sessions(user_id, user_role, token_hash, expires_at)
 	VALUES ($1, $2, $3, $4)
 	`, userID, req.Role, tokenHash, time.Now().Add(7*24*time.Hour))
 
+	if err != nil {
+		log.Printf("Database has fail, however Redis still store session: %v", err)
+	}
 	return c.JSON(LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -182,20 +189,28 @@ func (h *Handler) Refresh(c *fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"error": "refresh token invalido o expirado"})
 	}
 	var userID, role, campusID string
-	fmt.Sscanf(val, "%s|%s", &userID, &role)
-
+	parts := strings.Split(val, "|")
+	if len(parts) != 2 {
+		return c.Status(401).JSON(fiber.Map{"error": "sesion corrupta"})
+	}
+	userID, role = parts[0], parts[1]
+	var queryErr error
 	if role == "pilot" {
-		h.db.QueryRow(c.Context(),
+		queryErr = h.db.QueryRow(c.Context(),
 			`
 			SELECT campus_id FROM pilots WHERE pilot_id =$1
 		`, userID).Scan(&campusID)
 	} else {
-		h.db.QueryRow(c.Context(),
+		queryErr = h.db.QueryRow(c.Context(),
 			`
 		SELECT campus_id FROM students WHERE student_id=$1
 		`, userID).Scan(&campusID)
 	}
 
+	if queryErr != nil {
+		h.rdb.Del(c.Context(), key)
+		return c.Status(401).JSON(fiber.Map{"error": "usuario no encontrado"})
+	}
 	accessToken, err := h.jwt.GenerateAccess(userID, campusID, role)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{

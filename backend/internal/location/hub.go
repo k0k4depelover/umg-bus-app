@@ -38,10 +38,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -62,12 +65,33 @@ type LiveLocation struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// Hub ahora no solo maneja tiempo real (Redis),
+// sino también logging de ubicaciones en base de datos.
+//
+//	Responsabilidades nuevas:
+//
+// - Recibir ubicaciones (en tiempo real)
+// - Encolarlas en un channel (logCh)
+// - Procesarlas en background
+// - Guardarlas en batch (eficiente)
+//
+// Objetivo:
+// Evitar hacer INSERT por cada ubicación (muy lento)
+// y en su lugar agruparlas en bloques (batching)
 type Hub struct {
-	rdb *redis.Client
+	rdb   *redis.Client
+	db    *pgxpool.Pool
+	logCh chan LocationLogEntry // canal bufferizado
 }
 
-func NewHub(rdb *redis.Client) *Hub {
-	return &Hub{rdb: rdb}
+func NewHub(rdb *redis.Client, db *pgxpool.Pool) *Hub {
+	h := &Hub{
+		rdb:   rdb,
+		db:    db,
+		logCh: make(chan LocationLogEntry, 500),
+	}
+	go h.runLogWriter()
+	return h
 }
 
 /*
@@ -121,14 +145,37 @@ Cualquier parte suscrita recibira este mensaje inmediatamente.
 
 */
 
+// LocationLogEntry representa un punto de ubicación.
+//
+// 📍 Contiene:
+// - PilotID → quién envió la ubicación
+// - CampusID → contexto
+// - Lat/Lng → posición
+// - Bearing → dirección
+// - Speed → velocidad
+//
+// 🧠 Esto es lo que luego te permitirá:
+// - reconstruir rutas
+// - hacer tracking histórico
+// - análisis de movimiento
+type LocationLogEntry struct {
+	PilotID  string
+	CampusID string
+	Lat      float64
+	Lng      float64
+	Bearing  float64
+	Speed    float64
+}
+
 func (h *Hub) PublishLocation(ctx context.Context, pilotID, campusID string, ping PilotPing) error {
 	loc := LiveLocation{
-		PilotoID: pilotID,
-		CampusID: campusID,
-		Lat:      ping.Lat,
-		Lng:      ping.Lng,
-		Bearing:  ping.Bearing,
-		Speed:    ping.Speed,
+		PilotoID:  pilotID,
+		CampusID:  campusID,
+		Lat:       ping.Lat,
+		Lng:       ping.Lng,
+		Bearing:   ping.Bearing,
+		Speed:     ping.Speed,
+		UpdatedAt: time.Now(),
 	}
 	key := fmt.Sprintf("campus:live:%s:%s", campusID, pilotID)
 	pipe := h.rdb.Pipeline()
@@ -151,7 +198,25 @@ func (h *Hub) PublishLocation(ctx context.Context, pilotID, campusID string, pin
 	}
 	payload, _ := json.Marshal(loc)
 	channel := fmt.Sprintf("campus:channel:%s", campusID)
+
+	// Encolar para escritura asíncrona a PostgreSQL
+	// select con default: si el canal está lleno, descarta el punto
+	// (mejor perder un punto que bloquear el WebSocket)
+	select {
+	case h.logCh <- LocationLogEntry{
+		PilotID:  pilotID,
+		CampusID: campusID,
+		Lat:      ping.Lat,
+		Lng:      ping.Lng,
+		Bearing:  ping.Bearing,
+		Speed:    ping.Speed,
+	}:
+	default:
+		log.Println("location_log: canal lleno, punto descartado")
+	}
+
 	return h.rdb.Publish(ctx, channel, payload).Err() // .Err() -> Extrae el error de la ejecucion
+
 }
 
 /*
@@ -362,4 +427,264 @@ func (h *Hub) Suscribe(ctx context.Context, campusID string, conn *websocket.Con
 			return nil
 		}
 	}
+}
+
+// runLogWriter es un loop concurrente que procesa datos desde un channel
+// y los agrupa en memoria antes de enviarlos a la base de datos.
+//
+// =======================  CONCEPTOS TÉCNICOS =======================
+//
+//  CHANNEL (h.logCh)
+// - Tipo: chan LocationLogEntry
+// - Se crea con make(..., 500) → canal BUFFERIZADO
+// - Permite enviar datos sin bloquear hasta llenar 500 posiciones
+//
+// Sintaxis clave:
+//   h.logCh <- entry     → enviar dato
+//   entry := <-h.logCh   → recibir dato (bloqueante)
+//
+// --------------------------------------------------------------------
+//
+//  SELECT (multiplexor concurrente)
+// - Permite esperar múltiples operaciones de canal al mismo tiempo
+// - Funciona como un "switch", pero para concurrencia
+//
+// Comportamiento:
+//   1. Evalúa todos los case
+//   2. Ejecuta uno que esté listo
+//   3. Si ninguno está listo → bloquea
+//   4. Si varios están listos → elige uno aleatoriamente
+//
+// Sintaxis:
+//
+//   select {
+//   case entry := <-h.logCh:
+//       // recibe dato del canal
+//
+//   case <-ticker.C:
+//       // evento de tiempo
+//   }
+//
+// --------------------------------------------------------------------
+//
+//  TICKER (time.NewTicker)
+// - Genera un canal (ticker.C) que envía eventos cada intervalo
+//
+// Ejemplo:
+//   ticker := time.NewTicker(10 * time.Second)
+//   <-ticker.C   → se activa cada 10 segundos
+//
+// Importante:
+//   defer ticker.Stop() → libera recursos
+//
+// --------------------------------------------------------------------
+//
+//  SLICE (batch)
+// - Estructura dinámica ([]LocationLogEntry)
+// - Se usa para acumular datos en memoria
+//
+// Operaciones:
+//   batch = append(batch, entry) → agrega elemento
+//   len(batch)                   → tamaño actual
+//
+// Importante:
+//   append puede realocar memoria → siempre reasignar
+//
+// Reset:
+//   batch = nil     → libera referencia (GC limpia)
+//   batch = batch[:0] → reutiliza memoria (más eficiente)
+//
+// --------------------------------------------------------------------
+//
+//  FLUJO DE CONTROL
+//
+// 1. Llega dato por channel → case entry := <-h.logCh
+// 2. Se agrega al slice (append)
+// 3. Si len(batch) >= 100 → flush inmediato
+//
+// 4. Si pasan 10 segundos → case <-ticker.C
+//    → flush aunque no esté lleno
+//
+// --------------------------------------------------------------------
+//
+//  CONCURRENCIA
+//
+// - Esta función corre en una goroutine:
+//     go h.runLogWriter()
+//
+// - No bloquea el flujo principal (WebSocket)
+// - Desacopla producción (entrada de datos) de consumo (DB)
+//
+// --------------------------------------------------------------------
+//
+//  PATRÓN USADO
+//
+// Producer → Channel → Consumer
+//
+// En tu sistema:
+// WebSocket → logCh → runLogWriter → DB
+//
+// --------------------------------------------------------------------
+//
+//  OBJETIVO TÉCNICO
+//
+// - Reducir llamadas a DB (batching)
+// - Evitar bloqueo por IO
+// - Manejar concurrencia de forma segura
+//
+// ====================================================================
+
+func (h *Hub) runLogWriter() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	var batch []LocationLogEntry
+	for {
+		select {
+		case entry := <-h.logCh:
+			batch = append(batch, entry)
+
+			if len(batch) >= 100 {
+				h.flushBatch(batch)
+				batch = nil
+			}
+
+		case <-ticker.C:
+			if len(batch) > 0 {
+				h.flushBatch(batch)
+				batch = nil
+			}
+		}
+	}
+}
+
+// flushBatch realiza un INSERT masivo en PostgreSQL usando pgx.CopyFrom.
+//
+// =======================  CONCEPTOS TÉCNICOS =======================
+//
+//  MÉTODO (receiver)
+// - (h *Hub) → método asociado a struct Hub
+// - Se usa puntero → evita copias y permite acceso compartido
+//
+// --------------------------------------------------------------------
+//
+//  CONTEXT
+//
+//   ctx := context.Background()
+//
+// - Contexto base sin cancelación
+// - Se usa para operaciones I/O (DB, red)
+//
+// --------------------------------------------------------------------
+//
+//  COPYFROM (pgx)
+//
+//   h.db.CopyFrom(...)
+//
+// - Inserción masiva (bulk insert)
+// - Mucho más eficiente que múltiples INSERT
+//
+// Firma simplificada:
+//
+//   CopyFrom(ctx, table, columns, source)
+//
+// --------------------------------------------------------------------
+//
+//  IDENTIFIER
+//
+//   pgx.Identifier{"location_log"}
+//
+// - Representa el nombre de la tabla
+//
+// --------------------------------------------------------------------
+//
+//  COLUMNAS
+//
+//   []string{"pilot_id", "campus_id", ...}
+//
+// - Orden IMPORTANTE
+// - Debe coincidir con los datos enviados
+//
+// --------------------------------------------------------------------
+//
+//  COPYFROMSLICE
+//
+//   pgx.CopyFromSlice(len(batch), func(i int) ([]any, error))
+//
+// - Convierte un slice en un stream de filas
+// - Itera internamente:
+//     for i := 0; i < len(batch); i++
+//
+// --------------------------------------------------------------------
+//
+//  FUNCIÓN ANÓNIMA
+//
+//   func(i int) ([]any, error)
+//
+// - Recibe índice
+// - Devuelve una fila (slice de valores)
+//
+// Ejemplo:
+//
+//   e := batch[i]
+//   return []any{e.PilotID, e.CampusID, ...}, nil
+//
+// --------------------------------------------------------------------
+//
+//  []any
+//
+// - Slice genérico (equivalente a []interface{})
+// - Permite enviar distintos tipos a la DB
+//
+// --------------------------------------------------------------------
+//
+//  BLANK IDENTIFIER (_)
+//
+//   _, err := ...
+//
+// - Ignora el primer valor de retorno
+//
+// --------------------------------------------------------------------
+//
+//  MANEJO DE ERRORES
+//
+//   if err != nil {
+//       log.Printf(...)
+//       return
+//   }
+//
+// - No rompe el programa
+// - Solo registra el error
+//
+// --------------------------------------------------------------------
+//
+//  LOGGING
+//
+//   log.Printf("location_log: %d", len(batch))
+//
+// - Formato tipo printf
+//
+// --------------------------------------------------------------------
+//
+//  OBJETIVO TÉCNICO
+//
+// - Insertar múltiples registros en una sola operación
+// - Minimizar latencia y uso de conexiones DB
+//
+// ====================================================================
+
+func (h *Hub) flushBatch(batch []LocationLogEntry) {
+	ctx := context.Background()
+	_, err := h.db.CopyFrom(
+		ctx,
+		pgx.Identifier{"location_log"},
+		[]string{"pilot_id", "campus_id", "lat", "lng", "bearing", "speed_kmh"},
+		pgx.CopyFromSlice(len(batch), func(i int) ([]any, error) {
+			e := batch[i]
+			return []any{e.PilotID, e.CampusID, e.Lat, e.Lng, e.Bearing, e.Speed}, nil
+		}),
+	)
+	if err != nil {
+		log.Printf("error guardando location_log batch(%d): %v", len(batch), err)
+	}
+	log.Printf("location_log: %d puntos guardados", len(batch))
 }

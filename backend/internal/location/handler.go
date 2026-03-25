@@ -108,9 +108,10 @@ func HandlePilot(hub *Hub, jwtSvc *auth.JWTService) func(w http.ResponseWriter, 
 
 		if claims.Role != "pilot" {
 			http.Error(w, "acceso denegado", 403)
+			return
 		}
-		pilotID := r.URL.Query().Get("pilot_id")
-		campusID := r.URL.Query().Get("campus_id")
+		pilotID := claims.UserID
+		campusID := claims.CampusID
 
 		if pilotID == "" || campusID == "" {
 			http.Error(w, "pilot_id y campus_id son requeridos para la peticion", http.StatusBadRequest)
