@@ -35,12 +35,12 @@ El sistema se compone de:
 |---|---|---|
 | [Go](https://go.dev/) | 1.25 | Lenguaje del backend |
 | [Gofiber v2](https://gofiber.io/) | v2 | Framework HTTP REST |
-| [gqlgen](https://gqlgen.com/) | latest | GraphQL server |
+| [gqlgen](https://gqlgen.com/) | 0.17.88 | GraphQL server |
 | [PostgreSQL](https://www.postgresql.org/) | 15 | Base de datos relacional |
 | [pgx/v5](https://github.com/jackc/pgx) | v5 | Driver PostgreSQL para Go |
 | [Redis](https://redis.io/) | 8 | Cache en tiempo real + Pub/Sub |
-| [coder/websocket](https://github.com/coder/websocket) | latest | Protocolo WebSocket |
-| [golang-migrate](https://github.com/golang-migrate/migrate) | latest | Migraciones de base de datos |
+| [coder/websocket](https://github.com/coder/websocket) | 1.8.14 | Protocolo WebSocket |
+| [golang-migrate](https://github.com/golang-migrate/migrate) | 4.19.1 | Migraciones de base de datos |
 
 ### Mobile
 
@@ -49,10 +49,10 @@ El sistema se compone de:
 | [React Native](https://reactnative.dev/) | 0.84 | Framework movil nativo |
 | [TypeScript](https://www.typescriptlang.org/) | 5.8 | Tipado estatico |
 | [React Navigation](https://reactnavigation.org/) | 7.x | Navegacion (stack + tabs) |
-| [MapLibre React Native](https://github.com/maplibre/maplibre-react-native) | latest | Mapas open source |
+| [MapLibre React Native](https://github.com/maplibre/maplibre-react-native) | ^10.4.2 | Mapas open source |
 | [Zustand](https://zustand-demo.pmnd.rs/) | 5.x | Estado global (auth) |
-| [AsyncStorage](https://react-native-async-storage.github.io/async-storage/) | latest | Persistencia de tokens |
-| [Geolocation Service](https://github.com/Agontuk/react-native-geolocation-service) | latest | GPS tracking |
+| [AsyncStorage](https://react-native-async-storage.github.io/async-storage/) | ^3.0.2 | Persistencia de tokens |
+| [Geolocation Service](https://github.com/Agontuk/react-native-geolocation-service) | ^5.3.1 | GPS tracking |
 
 ### Infraestructura
 
@@ -97,7 +97,8 @@ El sistema se compone de:
        │  pilots           │    │  Pub/Sub channels  │
        │  students         │    │  Sessions (JWT)    │
        │  sessions         │    │                    │
-       │  campus_changes   │    └───────────────────┘
+       │  student_campus_  │    └───────────────────┘
+       │    changes        │
        │  location_log     │
        └───────────────────┘
 ```
