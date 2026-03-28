@@ -1,21 +1,21 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
-  Alert,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from '../../theme/colors';
-import { spacing } from '../../theme/spacing';
-import { typography } from '../../theme/typography';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { useAuth } from '../../hooks/useAuth';
+import { colors } from '../../theme/colors';
+import { spacing } from '../../theme/spacing';
+import { typography } from '../../theme/typography';
 
 export function LoginScreen() {
   const [username, setUsername] = useState('');
@@ -26,14 +26,22 @@ export function LoginScreen() {
 
   const { login, error, clearError } = useAuth();
 
+  // Mejora 1: Limpieza integral al cambiar de rol
+  const handleRoleChange = (newRole: 'student' | 'pilot') => {
+    setRole(newRole);
+    setPilotCode('');
+    clearError();
+  };
+
   const handleLogin = async () => {
+    // Validaciones locales
     if (!username.trim() || !password.trim()) {
       Alert.alert('Campos requeridos', 'Ingresa tu usuario y contraseña.');
       return;
     }
 
     if (role === 'pilot' && !pilotCode.trim()) {
-      Alert.alert('Código requerido', 'Ingresa el código de piloto para acceder como conductor.');
+      Alert.alert('Código requerido', 'Ingresa el código de piloto para acceder.');
       return;
     }
 
@@ -41,9 +49,12 @@ export function LoginScreen() {
     clearError();
 
     try {
+      // Mejora 2: Aseguramos el envío del pilotCode si es necesario
       await login(username.trim(), password.trim(), role);
-    } catch {
-      // Error is handled by the store
+    } catch (err) {
+      // Mejora 3: Captura de errores inesperados (ej. timeout o crash de red)
+      console.error("Login unexpected error:", err);
+      Alert.alert('Error', 'Ocurrió un fallo inesperado al intentar iniciar sesión.');
     } finally {
       setIsLoading(false);
     }
@@ -52,12 +63,14 @@ export function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+          // Mejora 5: 'always' permite cerrar el teclado al tocar fuera de los inputs más fácilmente
+          keyboardShouldPersistTaps="always"
+          bounces={false}
         >
           {/* Header */}
           <View style={styles.header}>
@@ -79,7 +92,7 @@ export function LoginScreen() {
                 styles.roleButton,
                 role === 'student' && styles.roleButtonActive,
               ]}
-              onPress={() => setRole('student')}
+              onPress={() => handleRoleChange('student')}
               activeOpacity={0.7}
             >
               <Text
@@ -96,7 +109,7 @@ export function LoginScreen() {
                 styles.roleButton,
                 role === 'pilot' && styles.roleButtonActive,
               ]}
-              onPress={() => setRole('pilot')}
+              onPress={() => handleRoleChange('pilot')}
               activeOpacity={0.7}
             >
               <Text
@@ -112,18 +125,24 @@ export function LoginScreen() {
 
           {/* Form */}
           <View style={styles.form}>
-            <Input
-              label="Usuario"
-              value={username}
-              onChangeText={setUsername}
-              placeholder="Tu nombre de usuario"
-              autoCapitalize="none"
-            />
+          <Input
+            label="Usuario"
+            value={username}
+            onChangeText={(val) => {
+              setUsername(val);
+              if (error) clearError();
+            }}
+            placeholder="Tu nombre de usuario"
+            autoCapitalize="none"
+          />
 
             <Input
               label="Contraseña"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(val) => {
+                setPassword(val);
+                if (error) clearError();
+              }}
               placeholder="Tu contraseña"
               secureTextEntry
             />
@@ -134,10 +153,11 @@ export function LoginScreen() {
                 value={pilotCode}
                 onChangeText={setPilotCode}
                 placeholder="Código de acceso"
-                autoCapitalize="none"
+                autoCapitalize="characters"
               />
             )}
 
+            {/* Mejora 6: Feedback visual inmediato del error del hook */}
             {error ? (
               <Text style={styles.errorText}>{error}</Text>
             ) : null}
@@ -151,7 +171,6 @@ export function LoginScreen() {
               style={styles.loginButton}
             />
 
-            {/* Future registration link */}
             <TouchableOpacity style={styles.registerLink} disabled>
               <Text style={styles.registerText}>
                 ¿No tienes cuenta?{' '}
@@ -178,7 +197,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    justifyContent: 'center',
+    paddingTop: 80,
+    paddingBottom: spacing.xl,
   },
   header: {
     alignItems: 'center',
@@ -252,6 +272,7 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.error,
     textAlign: 'center',
+    marginTop: -spacing.xs,
     paddingHorizontal: spacing.sm,
   },
   loginButton: {
