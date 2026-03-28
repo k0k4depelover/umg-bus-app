@@ -1,6 +1,6 @@
 services:
   redis:
-    image: redis:8.0-alpine          # 8.6.1 no existe aún, usa una tag real
+    image: redis:8.0-alpine
     container_name: redis-umg-transportation-tracker
     ports:
       - "6381:6379"
@@ -11,7 +11,7 @@ services:
   postgres:
     image: postgres:15
     container_name: postgres-umg-transportation-tracker
-    environment:                     # corregido el typo
+    environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: postgresumgtracker
       POSTGRES_DB: transportation-tracker-db
@@ -19,6 +19,37 @@ services:
       - "5436:5432"
     volumes:
       - postgres_umg_tracker:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d transportation-tracker-db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend-umg-transportation-tracker
+    ports:
+      - "8084:8084"
+      - "8085:8085"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: postgresumgtracker
+      POSTGRES_DB: transportation-tracker-db
+      REDIS_ADDR: redis:6379
+      REDIS_PASS: ""
+      APP_PORT: "8084"
+      WS_PORT: "8085"
+      JWT_SECRET: dev-secret-cambia-en-produccion
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

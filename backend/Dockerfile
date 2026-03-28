@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
  WORKDIR /app
 
  COPY go.mod go.sum ./
@@ -24,6 +24,6 @@ COPY --from=builder /app/migrations ./migrations
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
-EXPOSE 8084
+EXPOSE 8084 8085
 
 CMD [ "./server" ]
